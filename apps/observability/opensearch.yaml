@@ -1,0 +1,49 @@
+# Multi-source Application: source[0] is the upstream Helm chart (unvendored
+# — we never copy chart code into this repo), source[1] is THIS repo, used
+# only to supply values.yaml via the `ref: values` + `$values/...` syntax.
+# This is the standard Argo CD pattern for "external chart + our config"
+# (stable since Argo CD 2.6, GA since 2.10).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+    app.kubernetes.io/component: observability
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://opensearch-project.github.io/helm-charts/
+      chart: opensearch
+      # Pinned as of Aug 2026. Verify before bumping:
+      #   helm repo add opensearch https://opensearch-project.github.io/helm-charts/
+      #   helm search repo opensearch/opensearch --versions
+      targetRevision: "3.8.0"
+      helm:
+        releaseName: opensearch
+        valueFiles:
+          - $values/environments/local/observability/opensearch/values.yaml
+    - repoURL: https://github.com/YOUR_GITHUB_ORG/gitops-observability-config.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 2m

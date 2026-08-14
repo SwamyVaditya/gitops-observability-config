@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch-dashboards
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+    app.kubernetes.io/component: observability
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://opensearch-project.github.io/helm-charts/
+      chart: opensearch-dashboards
+      # Pinned as of Aug 2026. Verify before bumping:
+      #   helm search repo opensearch/opensearch-dashboards --versions
+      targetRevision: "3.6.0"
+      helm:
+        releaseName: opensearch-dashboards
+        valueFiles:
+          - $values/environments/local/observability/opensearch-dashboards/values.yaml
+    - repoURL: https://github.com/YOUR_GITHUB_ORG/gitops-observability-config.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 2m

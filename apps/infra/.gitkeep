@@ -1,0 +1,4 @@
+# Placeholder. Platform-level Applications (Traefik IngressRoutes, future
+# cert-manager, etc.) land in this directory in Step 4. Argo CD's root-app
+# already watches this path recursively — nothing else to wire up when we
+# add files here.

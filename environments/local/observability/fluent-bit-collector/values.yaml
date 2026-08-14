@@ -1,0 +1,38 @@
+# fluent-bit-collector runs as a DaemonSet (one pod per node), tailing
+# /var/log/containers/*.log with CRI multiline parsing and Kubernetes
+# metadata enrichment — this is the chart's default behavior out of the
+# box. We only need to override the OUTPUT destination.
+#
+# This chart GA'd March 2026 and its values schema may still be settling —
+# confirm the keys below before relying on them:
+#   helm repo add fluent https://fluent.github.io/helm-charts/
+#   helm show values fluent/fluent-bit-collector --version 1.0.9
+
+# Destination host assumes the same OpenSearch Service name as
+# opensearch-dashboards/values.yaml — confirm with
+# `kubectl get svc -n observability` after opensearch first syncs, and
+# correct `Host` below if the generated Service name differs.
+config:
+  outputs: |
+    [OUTPUT]
+        Name                opensearch
+        Match               kube.*
+        Host                opensearch-cluster-master
+        Port                9200
+        Index               app-logs
+        Suppress_Type_Name  On
+        tls                 Off
+        Replace_Dots        On
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+
+# Belt-and-suspenders: ensure the collector schedules onto every node
+# (including a tainted control-plane, if any) so no node's logs are missed.
+tolerations:
+  - operator: Exists

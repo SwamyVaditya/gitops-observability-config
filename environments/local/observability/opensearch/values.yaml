@@ -1,0 +1,47 @@
+# Single-node OpenSearch sized for a local k3d lab (Docker Desktop on
+# Windows) — NOT production sizing.
+#
+# Before first sync, sanity-check these keys against the chart's actual
+# schema (chart versions have shifted top-level keys before):
+#   helm repo add opensearch https://opensearch-project.github.io/helm-charts/
+#   helm show values opensearch/opensearch --version 3.8.0 > opensearch-schema.yaml
+
+clusterName: "opensearch-cluster"
+nodeGroup: "master"
+
+# Collapses the chart to a single pod: sets discovery.type=single-node
+# internally, skips multi-node quorum bootstrapping. Lab-only — never do
+# this for anything that needs to survive a node loss.
+singleNode: true
+replicas: 1
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+opensearchJavaOpts: "-Xms512m -Xmx512m"
+
+persistence:
+  enabled: true
+  size: 5Gi
+  # k3s ships Rancher's local-path-provisioner as the default StorageClass
+  # — a hostPath-backed PV, no external CSI driver needed. Confirm the
+  # exact class name registered on your cluster:
+  #   kubectl get storageclass
+  storageClass: "local-path"
+
+# Disables the security plugin (TLS, RBAC, internal user DB) entirely.
+# LAB-ONLY simplification. Do not carry this into any shared or
+# internet-reachable environment — configure demo certs / an admin
+# password properly instead of disabling the plugin.
+extraEnvs:
+  - name: DISABLE_SECURITY_PLUGIN
+    value: "true"
+
+config:
+  opensearch.yml: |
+    plugins.security.disabled: true

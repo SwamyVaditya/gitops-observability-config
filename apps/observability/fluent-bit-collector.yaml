@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit-collector
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+    app.kubernetes.io/component: observability
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://fluent.github.io/helm-charts/
+      chart: fluent-bit-collector
+      # Pinned as of Aug 2026. Verify before bumping:
+      #   helm repo add fluent https://fluent.github.io/helm-charts/
+      #   helm search repo fluent/fluent-bit-collector --versions
+      targetRevision: "1.0.9"
+      helm:
+        releaseName: fluent-bit-collector
+        valueFiles:
+          - $values/environments/local/observability/fluent-bit-collector/values.yaml
+    - repoURL: https://github.com/YOUR_GITHUB_ORG/gitops-observability-config.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 2m

@@ -1,0 +1,48 @@
+# Bootstrap entrypoint for the App-of-Apps pattern.
+#
+# This is the ONLY manifest you ever apply by hand:
+#   kubectl apply -f apps/root/root-app.yaml
+#
+# It tells Argo CD to watch this repo's `apps/` directory (recursively) and
+# treat every Application manifest found in it as something to reconcile.
+# Everything else (opensearch.yaml, fluent-bit-collector.yaml, future infra
+# apps, etc.) is discovered automatically — add a file, git push, Argo CD
+# picks it up on its next poll. No further kubectl/terraform needed.
+#
+# NOTE: this file itself is excluded from that recursive watch (see
+# `directory.exclude` below) so the root app does not attempt to manage its
+# own Application object. Its lifecycle is intentionally owned by the
+# person/CI bootstrapping the cluster, not by Argo CD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+  finalizers:
+    # Ensures `argocd app delete root-app` cascades and cleans up every
+    # child Application (and their resources) instead of orphaning them.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # TODO: replace with your actual remote once you push this repo.
+    repoURL: https://github.com/YOUR_GITHUB_ORG/gitops-observability-config.git
+    targetRevision: main
+    path: apps
+    directory:
+      recurse: true
+      exclude: "root/*.yaml"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true # remove resources for Applications deleted from git
+      selfHeal: true # revert any manual/out-of-band cluster drift
+    syncOptions:
+      - CreateNamespace=true

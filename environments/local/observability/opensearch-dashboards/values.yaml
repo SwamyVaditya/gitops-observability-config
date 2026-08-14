@@ -1,0 +1,29 @@
+# Points Dashboards at the Service created by the `opensearch` release.
+# The exact Service DNS name depends on the chart's release+nodeGroup
+# naming convention — CONFIRM after opensearch first syncs:
+#   kubectl get svc -n observability
+# and correct opensearchHosts below if it doesn't match what's listed.
+opensearchHosts: "http://opensearch-cluster-master:9200"
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# Must match the security-plugin-disabled OpenSearch backend (see
+# ../opensearch/values.yaml) — Dashboards must not attempt TLS/auth
+# negotiation against a backend that has none.
+extraEnvs:
+  - name: DISABLE_SECURITY_DASHBOARDS_PLUGIN
+    value: "true"
+
+# No ingress here on purpose. Step 4 wires host-based routing
+# (opensearch-dashboards.local) via a separately managed Traefik
+# IngressRoute under apps/infra/ — not this chart's built-in ingress.
+ingress:
+  enabled: false
