@@ -32,6 +32,23 @@ resources:
     cpu: "200m"
     memory: "128Mi"
 
+# The chart's default hostVolumes mounts /etc/machine-id as a hostPath of
+# type "File". k3d nodes are themselves just Docker containers, not real
+# VMs/bare metal, and typically don't expose a real /etc/machine-id file at
+# that path — the kubelet's existence check fails and the pod sticks in
+# ContainerCreating indefinitely (see MountVolume.SetUp FailedMount events).
+#
+# Helm replaces list values wholesale rather than merging, so overriding
+# hostVolumes here drops the machine-id mount entirely and keeps only the
+# one that actually matters for log collection. machine-id is optional host
+# metadata, not required for tailing container logs.
+hostVolumes:
+  - name: logs
+    mountPath: /var/log
+    hostPath:
+      path: /var/log
+      type: Directory
+
 # Belt-and-suspenders: ensure the collector schedules onto every node
 # (including a tainted control-plane, if any) so no node's logs are missed.
 tolerations:
