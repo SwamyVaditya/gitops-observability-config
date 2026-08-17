@@ -20,6 +20,14 @@ Bit Collector, and OpenSearch Dashboards workloads in the `observability`
 namespace. The cluster and Argo CD itself come from
 `gitops-observability-infra` — this repo assumes both already exist.
 
+## Verified working
+
+![Argo CD showing all 4 Applications Synced/Healthy](docs/screenshots/01-argocd-apps-synced-healthy.png)
+*All 4 Applications (`root-app`, `opensearch`, `opensearch-dashboards`,
+`fluent-bit-collector`) reconciled and healthy on a local k3d cluster,
+after resolving the `/etc/machine-id` hostVolume issue documented in the
+infra repo's `RUNBOOK.md`.*
+
 ## Layout
 
 ```
@@ -69,11 +77,11 @@ helm search repo opensearch/ fluent/fluent-bit-collector --versions
 
 ## Known follow-ups (flagged, not yet resolved)
 
-- `opensearchHosts` in `opensearch-dashboards/values.yaml` and `Host` in
-  `fluent-bit-collector/values.yaml` both assume a Service name of
-  `opensearch-cluster-master`. Confirm this against
-  `kubectl get svc -n observability` after the `opensearch` Application
-  first syncs, and correct both files if it doesn't match.
 - Security plugins are disabled on both OpenSearch and Dashboards
   (`DISABLE_SECURITY_PLUGIN`, `DISABLE_SECURITY_DASHBOARDS_PLUGIN`) —
   lab-only simplification, not something to carry into shared environments.
+
+Resolved: `opensearchHosts`/`Host` matching the real
+`opensearch-cluster-master` Service name, and the `fluent-bit-collector`
+`/etc/machine-id` hostVolume mount failing on k3d nodes — see infra repo's
+`RUNBOOK.md` for the fix.
