@@ -1,0 +1,82 @@
+<svg width="100%" viewBox="0 0 900 740" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>GitOps observability lab architecture</title>
+<desc>Two GitHub repos, gitops-observability-infra and gitops-observability-config, feed a local k3d cluster. The infra repo's Terraform provisions the cluster and installs Argo CD. The config repo is continuously synced by Argo CD, which deploys OpenSearch, Fluent Bit Collector, and OpenSearch Dashboards into the observability namespace. Traefik routes browser traffic in.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+.t{font-size:14px;fill:#2C2C2A;}
+.th{font-size:14px;font-weight:600;}
+.ts{font-size:12px;}
+</style>
+
+<rect x="350" y="20" width="200" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th t" x="450" y="45" text-anchor="middle">You (local machine)</text>
+
+<path d="M420 60 L420 80 L240 80 L240 100" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M480 60 L480 80 L660 80 L660 100" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="300" y="76" fill="#5F5E5A">git push</text>
+<text class="ts" x="600" y="76" fill="#5F5E5A">git push</text>
+
+<rect x="70" y="100" width="340" height="64" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="th" x="240" y="126" text-anchor="middle" fill="#712B13">gitops-observability-infra</text>
+<text class="ts" x="240" y="146" text-anchor="middle" fill="#993C1D">Terraform: k3d cluster + Argo CD bootstrap</text>
+
+<rect x="490" y="100" width="340" height="64" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="660" y="126" text-anchor="middle" fill="#085041">gitops-observability-config</text>
+<text class="ts" x="660" y="146" text-anchor="middle" fill="#0F6E56">Argo CD Applications + Helm values</text>
+
+<path d="M240 164 L210 250" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="140" y="205" fill="#5F5E5A">terraform apply</text>
+
+<path d="M660 164 L660 230 L340 230 L340 250" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="460" y="224" fill="#5F5E5A">git pull (continuous sync)</text>
+
+<rect x="40" y="200" width="820" height="430" rx="16" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text class="th t" x="60" y="222">k3d cluster — Docker Desktop (WSL2)</text>
+
+<rect x="80" y="250" width="260" height="70" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="th" x="210" y="276" text-anchor="middle" fill="#3C3489">Argo CD</text>
+<text class="ts" x="210" y="296" text-anchor="middle" fill="#534AB7">argocd namespace, App-of-Apps</text>
+
+<path d="M340 270 L440 270" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="345" y="262" fill="#5F5E5A">deploys via Helm</text>
+
+<rect x="440" y="250" width="380" height="300" rx="12" fill="none" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="3 3"/>
+<text class="th" x="460" y="272" fill="#085041">observability namespace</text>
+
+<rect x="470" y="300" width="170" height="60" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="555" y="323" text-anchor="middle" fill="#085041">OpenSearch</text>
+<text class="ts" x="555" y="341" text-anchor="middle" fill="#0F6E56">StatefulSet + PVC</text>
+
+<rect x="470" y="430" width="170" height="60" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="555" y="453" text-anchor="middle" fill="#085041">OpenSearch Dashboards</text>
+<text class="ts" x="555" y="471" text-anchor="middle" fill="#0F6E56">Deployment</text>
+
+<path d="M555 430 L555 360" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="565" y="398" fill="#5F5E5A">queries</text>
+
+<rect x="660" y="365" width="140" height="60" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="730" y="388" text-anchor="middle" fill="#085041">Fluent Bit Collector</text>
+<text class="ts" x="730" y="406" text-anchor="middle" fill="#0F6E56">DaemonSet, all nodes</text>
+
+<path d="M660 395 L640 330" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="620" y="380" fill="#5F5E5A">ships logs</text>
+
+<rect x="80" y="550" width="260" height="60" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th t" x="210" y="573" text-anchor="middle">Traefik</text>
+<text class="ts" x="210" y="591" text-anchor="middle" fill="#5F5E5A">ingress, ships with k3s</text>
+
+<path d="M440 500 L340 580" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="345" y="530" fill="#5F5E5A">routes to</text>
+
+<rect x="350" y="650" width="200" height="50" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th t" x="450" y="670" text-anchor="middle">Browser</text>
+<text class="ts" x="450" y="688" text-anchor="middle" fill="#5F5E5A">opensearch-dashboards.local</text>
+
+<path d="M210 610 L210 635 L410 635 L410 650" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+
+</svg>

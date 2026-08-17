@@ -8,6 +8,18 @@ Cluster + Argo CD provisioning lives in the separate
 `gitops-observability-infra` repo (Terraform). This repo is what Argo CD
 watches once that bootstrap is done.
 
+## Architecture
+
+![GitOps observability lab architecture](docs/architecture.svg)
+
+This repo owns the **right-hand side**: everything Argo CD reconciles once
+it's watching this repo — the App-of-Apps discovery in `apps/`, the
+multi-source `Application` objects that pair each upstream Helm chart with
+`environments/local/.../values.yaml`, and the resulting OpenSearch, Fluent
+Bit Collector, and OpenSearch Dashboards workloads in the `observability`
+namespace. The cluster and Argo CD itself come from
+`gitops-observability-infra` — this repo assumes both already exist.
+
 ## Layout
 
 ```
