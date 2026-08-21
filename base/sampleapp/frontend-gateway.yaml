@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-gateway
+  labels:
+    app.kubernetes.io/name: frontend-gateway
+    app.kubernetes.io/component: sampleapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend-gateway
+    spec:
+      containers:
+        - name: frontend-gateway
+          # Built locally and imported via `k3d image import` — no
+          # registry involved in this lab, hence IfNotPresent below.
+          image: sampleapp/frontend-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: ORDER_SERVICE_URL
+              value: http://order-service:8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-gateway
+spec:
+  selector:
+    app.kubernetes.io/name: frontend-gateway
+  ports:
+    - port: 3000
+      targetPort: 3000

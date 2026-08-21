@@ -34,16 +34,27 @@ infra repo's `RUNBOOK.md`.*
 apps/                   Argo CD Application manifests only (App-of-Apps)
 ├── root/                 the one manifest you apply by hand (bootstrap)
 ├── infra/                platform-level Applications (Traefik, etc. — Step 4)
-└── observability/        EFK-equivalent stack: OpenSearch, Dashboards, Fluent Bit
+├── observability/        EFK-equivalent stack: OpenSearch, Dashboards,
+│                         Fluent Bit, and the OpenSearch ISM bootstrap Job
+└── sampleapp/            the checkout-flow demo app
+
+base/                    Kustomize bases for resources we own (not
+│                         third-party charts — those stay external, see
+│                         Architecture above)
+├── sampleapp/             Deployments/Services for the checkout flow
+└── opensearch-ism-bootstrap/  ConfigMap + Job applying the ISM policy
 
 environments/
-└── local/                 values.yaml overlays for the `local` environment
-    └── observability/       one subfolder per Helm release
+└── local/                 overlays for the `local` environment
+    ├── observability/       one subfolder per Helm release (values.yaml)
+    ├── sampleapp/            Kustomize overlay (base/sampleapp/)
+    └── opensearch-ism-bootstrap/  Kustomize overlay (base/opensearch-ism-bootstrap/)
 ```
 
 Adding a `environments/staging/` or `environments/prod/` later means adding
-sibling folders here with their own `values.yaml` — the chart references in
-`apps/` stay the same, only the Application's `valueFiles` path changes.
+sibling folders here with their own `values.yaml`/overlay — the chart
+references and `base/` content stay the same, only the environment-specific
+layer changes.
 
 ## Bootstrapping (one-time, manual)
 
@@ -77,6 +88,17 @@ helm search repo opensearch/ fluent/fluent-bit-collector --versions
 
 ## Known follow-ups (flagged, not yet resolved)
 
+- `curlimages/curl:8.10.1` in `base/opensearch-ism-bootstrap/job.yaml` is
+  an unverified tag — confirm it exists before relying on it.
+- Whether `config.filters` in `fluent-bit-collector/values.yaml` replaces
+  or appends to the chart's default filter chain is unconfirmed — written
+  defensively (includes the `kubernetes` enrichment filter explicitly) so
+  it works either way, but worth confirming against
+  `helm show values fluent/fluent-bit-collector` directly.
+- Namespace scoping (`sampleapp|observability` only) means Argo CD's and
+  k3s system component logs are no longer collected. If you ever want
+  those back for debugging Argo CD itself, drop the `grep` filter or widen
+  its regex.
 - Security plugins are disabled on both OpenSearch and Dashboards
   (`DISABLE_SECURITY_PLUGIN`, `DISABLE_SECURITY_DASHBOARDS_PLUGIN`) —
   lab-only simplification, not something to carry into shared environments.
@@ -85,3 +107,26 @@ Resolved: `opensearchHosts`/`Host` matching the real
 `opensearch-cluster-master` Service name, and the `fluent-bit-collector`
 `/etc/machine-id` hostVolume mount failing on k3d nodes — see infra repo's
 `RUNBOOK.md` for the fix.
+
+## Disk usage / log retention
+
+Log ingestion was originally unbounded: `fluent-bit-collector` matched
+`kube.*` (every namespace, including Argo CD's and k3s's own noisy
+components), writing into a single static `app-logs` index with no
+retention policy — and `local-path-provisioner` doesn't actually enforce
+a PVC's declared size as a disk quota, so nothing capped it. On a Windows
+host this manifests as the WSL2 `.vhdx` growing continuously; see the
+infra repo's `RUNBOOK.md` for how to reclaim space if this already
+happened to you.
+
+Fixed as of this commit:
+- `fluent-bit-collector` now only collects from `sampleapp` and
+  `observability` namespaces.
+- Logs land in daily indices (`app-logs-YYYY.MM.DD`) instead of one
+  ever-growing index.
+- `apps/observability/opensearch-ism-bootstrap.yaml` deploys a Job (Argo
+  CD `PostSync` hook, re-runs on every sync) that applies an OpenSearch
+  ISM policy deleting `app-logs-*` indices after 3 days, and an index
+  template setting `number_of_replicas: 0` (correct for a single-node
+  cluster — replicas can never be assigned with only one node, so leaving
+  the default just causes perpetual yellow cluster health for no benefit).

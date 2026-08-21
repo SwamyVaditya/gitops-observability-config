@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  labels:
+    app.kubernetes.io/name: load-generator
+    app.kubernetes.io/component: sampleapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: load-generator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: load-generator
+    spec:
+      containers:
+        - name: load-generator
+          image: sampleapp/load-generator:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GATEWAY_URL
+              value: http://frontend-gateway:3000
+            - name: SLEEP_SECONDS
+              value: "1.5"
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"

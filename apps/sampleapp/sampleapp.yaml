@@ -1,0 +1,37 @@
+# Single-source, unlike the observability Applications: there's no
+# upstream chart to separate from here, this is our own app. Argo CD
+# auto-detects Kustomize from the kustomization.yaml at this path.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sampleapp
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+    app.kubernetes.io/component: sampleapp
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SwamyVaditya/gitops-observability-config.git
+    targetRevision: main
+    path: environments/local/sampleapp
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sampleapp
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 2m

@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch-ism-bootstrap
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-observability-lab
+    app.kubernetes.io/component: observability
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SwamyVaditya/gitops-observability-config.git
+    targetRevision: main
+    path: environments/local/opensearch-ism-bootstrap
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

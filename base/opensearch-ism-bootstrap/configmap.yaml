@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-ism-bootstrap-config
+data:
+  policy.json: |
+    {
+      "policy": {
+        "description": "Delete app-logs-* indices after 3 days to bound disk usage on local-path storage, which does not enforce PVC size as a real quota.",
+        "default_state": "hot",
+        "states": [
+          {
+            "name": "hot",
+            "actions": [],
+            "transitions": [
+              {
+                "state_name": "delete",
+                "conditions": { "min_index_age": "3d" }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "actions": [ { "delete": {} } ],
+            "transitions": []
+          }
+        ]
+      }
+    }
+  template.json: |
+    {
+      "index_patterns": ["app-logs-*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 0,
+          "plugins.index_state_management.policy_id": "log-retention-policy"
+        }
+      }
+    }

@@ -1,0 +1,66 @@
+# OpenSearch's Helm chart has no native way to declare ISM policies or
+# index templates — those are application-level OpenSearch API resources,
+# not Kubernetes objects, so there's no CRD for them without adopting an
+# operator (which we deliberately avoided — see opensearch/values.yaml
+# comments). The realistic pattern here, same as most teams use for this
+# exact gap, is a one-time Job that calls the API directly.
+#
+# Declared as an Argo CD PostSync hook with hook-delete-policy:
+# BeforeHookCreation, so it re-runs (delete-and-recreate) on every sync of
+# this Application — meaning edits to configmap.yaml (e.g. changing
+# min_index_age) take effect on the next push, not just the first one.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-ism-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          # Verify this tag still exists before relying on it —
+          # not something I can confirm from this environment:
+          #   docker pull curlimages/curl:8.10.1
+          image: curlimages/curl:8.10.1
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              HOST="http://opensearch-cluster-master:9200"
+
+              echo "waiting for opensearch..."
+              until curl -s -o /dev/null -w '%{http_code}' "$HOST/_cluster/health" | grep -qE '^200$'; do
+                sleep 5
+              done
+
+              echo "applying ISM policy (delete-then-create for idempotency — the ISM API requires seq_no/primary_term to update an existing policy, so plain re-PUT fails on a second run)"
+              curl -s -X DELETE "$HOST/_plugins/_ism/policies/log-retention-policy" || true
+              curl -s -X PUT "$HOST/_plugins/_ism/policies/log-retention-policy" \
+                -H 'Content-Type: application/json' \
+                --data-binary @/config/policy.json
+              echo
+
+              echo "applying index template (plain PUT is idempotent for templates)"
+              curl -s -X PUT "$HOST/_index_template/app-logs-template" \
+                -H 'Content-Type: application/json' \
+                --data-binary @/config/template.json
+              echo
+
+              echo "removing the old static 'app-logs' index from before this fix, if present (safe to fail if it doesn't exist)"
+              curl -s -X DELETE "$HOST/app-logs" || true
+              echo
+
+              echo "done"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          configMap:
+            name: opensearch-ism-bootstrap-config

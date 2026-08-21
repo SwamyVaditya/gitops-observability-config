@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sampleapp
+
+resources:
+  - ../../../base/sampleapp
+
+# Nothing to patch for `local` beyond the namespace right now. A future
+# `environments/staging/sampleapp/` overlay would add things like:
+#   - images: [...]      (real registry image refs instead of :local)
+#   - patches: [...]     (imagePullPolicy: Always, higher replica counts)
+# without ever touching base/sampleapp/.
