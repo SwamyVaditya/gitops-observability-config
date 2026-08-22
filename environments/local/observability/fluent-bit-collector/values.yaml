@@ -20,56 +20,60 @@
 # correct `Host` below if the generated Service name differs.
 # Disable the chart's automated magic so it takes your configuration literally
 config:
-  # FIX 1: Pass config.service as a structural map block instead of a string
   service:
-    log_level: "info"
-    flush: 1
     daemon: "off"
-    parsers_file: "parsers.conf"
+    flush: 1
+    log_level: "info"
+    parsers_file: "/fluent-bit/etc/parsers.conf"
+    http_server: true
+    http_listen: "0.0.0.0"
+    http_port: 2020
 
-  # Keep inputs, filters, and outputs as multiline strings (the chart accepts these as text strings)
-  inputs: |
-    [INPUT]
-        Name              tail
-        Tag               kube.*
-        Path              /var/log/containers/*.log
-        Parser            cri
-        DB                /var/log/flb_kube_v3.db
-        Mem_Buf_Limit     50MB
-        Skip_Long_Lines   On
+  pipeline:
+    inputs:
+      - name: "tail"
+        alias: "k8s-logs"
+        path: "/var/log/containers/*.log"
+        multiline.parser: "cri"
+        db: "/var/log/flb_kube_v5.db"
+        mem_buf_limit: "50MB"
+        skip_long_lines: true
+        read_from_head: true
+        # Tag strings become: kube.sampleapp.pod-name.container-name
+        tag: "kube.<namespace_name>.<pod_name>.<container_name>"
+        tag_regex: "(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-"
 
-  filters: |
-    [FILTER]
-        Name                kubernetes
-        Match               kube.*
-        Merge_Log           On
-        Keep_Log            Off
-        K8S-Logging.Parser  On
-        K8S-Logging.Exclude On
+    filters:
+      # 1. Attach Kubernetes Metadata Processor
+      - name: "kubernetes"
+        match: "kube.*"
+        kube_tag_prefix: "kube."
+        merge_log: true
+        keep_log: false
+        k8s-logging.parser: true
+        k8s-logging.exclude: true
 
-    # Drop observability logs cleanly before processing to eliminate loop errors
-    [FILTER]
-        Name    grep
-        Match   kube.*
-        Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
+      # 2. INSTANTLY drop observability and control plane noise to kill loops
+      - name: "grep"
+        match: "kube.*"
+        exclude: "$kubernetes['namespace_name'] ^(observability|kube-system)$"
 
-    # Isolate sampleapp namespace metrics
-    [FILTER]
-        Name    grep
-        Match   kube.*
-        Regex   $kubernetes['namespace_name'] ^sampleapp$
+      # 3. Whitelist ONLY your application target
+      - name: "grep"
+        match: "kube.*"
+        regex: "$kubernetes['namespace_name'] ^sampleapp$"
 
-  outputs: |
-    [OUTPUT]
-        Name                opensearch
-        Match               kube.*
-        Host                opensearch-cluster-master
-        Port                9200
-        Logstash_Format     On
-        Logstash_Prefix     app-logs
-        Suppress_Type_Name  On
-        tls                 Off
-        Replace_Dots        On
+    outputs:
+      # Route cleanly to your local OpenSearch Instance
+      - name: "opensearch"
+        match: "kube.*"
+        host: "opensearch-cluster-master"
+        port: 9200
+        logstash_format: true
+        logstash_prefix: "app-logs"
+        suppress_type_name: true
+        tls: false
+        replace_dots: true
 
 
 # FIX: Increase memory limits to prevent OOMKilled crash looping
