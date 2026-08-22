@@ -19,6 +19,18 @@
 # `kubectl get svc -n observability` after opensearch first syncs, and
 # correct `Host` below if the generated Service name differs.
 config:
+  # FIX 1: Restrict at the disk-level so Fluent Bit never looks at system folders
+  inputs: |
+    [INPUT]
+      Name              tail
+      Tag               kube.*
+      Path              /var/log/containers/*_sampleapp_*.log
+      Parser            docker
+      DB                /var/log/flb_kube.db
+      Mem_Buf_Limit     50MB
+      Skip_Long_Lines   On
+      Refresh_Interval  10
+
   filters: |
     [FILTER]
         Name                kubernetes
@@ -28,21 +40,17 @@ config:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
+    # FIX 2: Explicitly drop any observability/infra logs BEFORE processing
     [FILTER]
         Name    grep
         Match   kube.*
-        Regex   $kubernetes['namespace_name'] ^(sampleapp)$
+        Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
 
-    # Defense in depth: even if the namespace allow-list above is ever
-    # widened to include `observability` again, this stops fluent-bit
-    # from tailing its OWN container's log output — which caused a real
-    # self-ingestion feedback loop (each cycle re-processed its own
-    # previous output, nested inside itself, growing without bound).
-    # Confirmed on a real run; see infra repo RUNBOOK.md.
+    # FIX 3: Whitelist ONLY the application logs
     [FILTER]
-        Name      grep
-        Match     kube.*
-        Exclude   $kubernetes['pod_name'] ^fluent-bit-collector-
+        Name    grep
+        Match   kube.*
+        Regex   $kubernetes['namespace_name'] ^sampleapp$
 
   outputs: |
     [OUTPUT]
@@ -56,13 +64,27 @@ config:
         tls                 Off
         Replace_Dots        On
 
+# FIX 4: Increase memory limits to prevent OOMKilled crash looping
 resources:
   requests:
-    cpu: "50m"
-    memory: "64Mi"
-  limits:
-    cpu: "200m"
+    cpu: "100m"
     memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# FIX 5: Ensure standard Fluent Bit chart path volumes are correctly mapped
+hostVolumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+
+tolerations:
+  - operator: Exists
+
 
 # The chart's default hostVolumes mounts /etc/machine-id as a hostPath of
 # type "File". k3d nodes are themselves just Docker containers, not real
@@ -74,14 +96,14 @@ resources:
 # hostVolumes here drops the machine-id mount entirely and keeps only the
 # one that actually matters for log collection. machine-id is optional host
 # metadata, not required for tailing container logs.
-hostVolumes:
-  - name: logs
-    mountPath: /var/log
-    hostPath:
-      path: /var/log
-      type: Directory
+#hostVolumes:
+#  - name: logs
+#    mountPath: /var/log
+#    hostPath:
+#      path: /var/log
+#      type: Directory
 
 # Belt-and-suspenders: ensure the collector schedules onto every node
 # (including a tainted control-plane, if any) so no node's logs are missed.
-tolerations:
-  - operator: Exists
+#tolerations:
+#  - operator: Exists
