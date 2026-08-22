@@ -76,9 +76,11 @@ resources:
 # FIX 5: Ensure standard Fluent Bit chart path volumes are correctly mapped
 hostVolumes:
   - name: varlog
+    mountPath: /var/log
     hostPath:
       path: /var/log
   - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
     hostPath:
       path: /var/lib/docker/containers
 
