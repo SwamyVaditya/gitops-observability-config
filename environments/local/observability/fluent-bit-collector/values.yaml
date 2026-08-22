@@ -23,9 +23,7 @@ config:
     [INPUT]
       Name              tail
       Tag               kube.*
-      # FIX 1: Broaden path so containerd/k3s logs are captured cleanly
       Path              /var/log/containers/*.log
-      # FIX 2: Change parser to 'cri' because k3d uses containerd internally
       Parser            cri
       DB                /var/log/flb_kube.db
       Mem_Buf_Limit     50MB
@@ -41,7 +39,13 @@ config:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
-    # FIX 3: Explicitly discard everything except your active workspace
+    # CRITICAL: Instantly drop Fluent Bit's own logs to stop the nesting behavior
+    [FILTER]
+        Name    grep
+        Match   kube.*
+        Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
+
+    # TARGET: Route exclusively your sampleapp payload strings
     [FILTER]
         Name    grep
         Match   kube.*
