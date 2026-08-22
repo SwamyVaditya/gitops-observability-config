@@ -35,7 +35,7 @@ config:
         alias: "k8s-logs"
         path: "/var/log/containers/*.log"
         multiline.parser: "cri"
-        db: "/var/log/flb_kube_v5.db"
+        #db: "/var/log/flb_kube_v5.db"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
