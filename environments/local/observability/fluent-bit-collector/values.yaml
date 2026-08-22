@@ -18,18 +18,26 @@
 # opensearch-dashboards/values.yaml — confirm with
 # `kubectl get svc -n observability` after opensearch first syncs, and
 # correct `Host` below if the generated Service name differs.
+# Disable the chart's automated magic so it takes your configuration literally
 config:
+  service: |
+    [SERVICE]
+        Flush         1
+        Log_Level     info
+        Daemon        off
+        Parsers_File  parsers.conf
+
   inputs: |
     [INPUT]
-      Name              tail
-      Tag               kube.*
-      Path              /var/log/containers/*.log
-      Parser            cri
-      DB                /var/log/flb_kube.db
-      Mem_Buf_Limit     50MB
-      Skip_Long_Lines   On
-      Refresh_Interval  10
+        Name              tail
+        Tag               kube.*
+        Path              /var/log/containers/*.log
+        Parser            cri
+        DB                /var/log/flb_kube_final.db
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
 
+  # THE CORRECTION: Force explicit placement of exclusions
   filters: |
     [FILTER]
         Name                kubernetes
@@ -39,13 +47,13 @@ config:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
-    # CRITICAL: Instantly drop Fluent Bit's own logs to stop the nesting behavior
+    # Drop observability instantly at processing time
     [FILTER]
         Name    grep
         Match   kube.*
         Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
 
-    # TARGET: Route exclusively your sampleapp payload strings
+    # Only include sampleapp logs
     [FILTER]
         Name    grep
         Match   kube.*
