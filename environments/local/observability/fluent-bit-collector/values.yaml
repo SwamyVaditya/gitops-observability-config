@@ -20,24 +20,24 @@
 # correct `Host` below if the generated Service name differs.
 # Disable the chart's automated magic so it takes your configuration literally
 config:
-  service: |
-    [SERVICE]
-        Flush         1
-        Log_Level     info
-        Daemon        off
-        Parsers_File  parsers.conf
+  # FIX 1: Pass config.service as a structural map block instead of a string
+  service:
+    log_level: "info"
+    flush: 1
+    daemon: "off"
+    parsers_file: "parsers.conf"
 
+  # Keep inputs, filters, and outputs as multiline strings (the chart accepts these as text strings)
   inputs: |
     [INPUT]
         Name              tail
         Tag               kube.*
         Path              /var/log/containers/*.log
         Parser            cri
-        DB                /var/log/flb_kube_final.db
+        DB                /var/log/flb_kube_v3.db
         Mem_Buf_Limit     50MB
         Skip_Long_Lines   On
 
-  # THE CORRECTION: Force explicit placement of exclusions
   filters: |
     [FILTER]
         Name                kubernetes
@@ -47,13 +47,13 @@ config:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
-    # Drop observability instantly at processing time
+    # Drop observability logs cleanly before processing to eliminate loop errors
     [FILTER]
         Name    grep
         Match   kube.*
         Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
 
-    # Only include sampleapp logs
+    # Isolate sampleapp namespace metrics
     [FILTER]
         Name    grep
         Match   kube.*
