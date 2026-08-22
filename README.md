@@ -95,10 +95,10 @@ helm search repo opensearch/ fluent/fluent-bit-collector --versions
   defensively (includes the `kubernetes` enrichment filter explicitly) so
   it works either way, but worth confirming against
   `helm show values fluent/fluent-bit-collector` directly.
-- Namespace scoping (`sampleapp|observability` only) means Argo CD's and
-  k3s system component logs are no longer collected. If you ever want
-  those back for debugging Argo CD itself, drop the `grep` filter or widen
-  its regex.
+- Namespace scoping (`sampleapp` only) means Argo CD's, k3s system
+  components', and the observability stack's own logs are not collected.
+  If you ever want those back for debugging, widen the `grep` filter's
+  namespace regex — but see the incident note below first.
 - Security plugins are disabled on both OpenSearch and Dashboards
   (`DISABLE_SECURITY_PLUGIN`, `DISABLE_SECURITY_DASHBOARDS_PLUGIN`) —
   lab-only simplification, not something to carry into shared environments.
@@ -110,18 +110,33 @@ Resolved: `opensearchHosts`/`Host` matching the real
 
 ## Disk usage / log retention
 
-Log ingestion was originally unbounded: `fluent-bit-collector` matched
-`kube.*` (every namespace, including Argo CD's and k3s's own noisy
-components), writing into a single static `app-logs` index with no
-retention policy — and `local-path-provisioner` doesn't actually enforce
-a PVC's declared size as a disk quota, so nothing capped it. On a Windows
-host this manifests as the WSL2 `.vhdx` growing continuously; see the
-infra repo's `RUNBOOK.md` for how to reclaim space if this already
-happened to you.
+Two separate real incidents happened here, confirmed on a real run —
+worth understanding both since they look similar (disk climbing) but have
+different causes and fixes.
+
+**Incident 1 — unbounded ingestion (fixed).** `fluent-bit-collector`
+originally matched `kube.*` (every namespace) into a single static
+`app-logs` index with no retention policy, and `local-path-provisioner`
+doesn't enforce a PVC's declared size as a disk quota, so nothing capped
+growth. On Windows this shows up as the WSL2 `.vhdx` growing continuously;
+see the infra repo's `RUNBOOK.md` for how to reclaim already-consumed
+space.
+
+**Incident 2 — self-ingestion feedback loop (fixed).** The first fix for
+Incident 1 scoped collection to `sampleapp|observability` namespaces —
+but `observability` is the namespace `fluent-bit-collector` itself runs
+in. That meant it tailed its own container's log output, re-processed its
+own previous output on the next cycle, which appeared in its own log file
+again, compounding every cycle. This was an actively *growing* leak, not
+a static one — confirmed by log output showing the same record nested
+inside itself dozens of times. Fixed by narrowing collection to
+`sampleapp` only, plus an explicit `grep Exclude` filter on
+`kubernetes['pod_name'] ^fluent-bit-collector-` as defense in depth, so
+this can't recur even if the namespace list is widened again later.
 
 Fixed as of this commit:
-- `fluent-bit-collector` now only collects from `sampleapp` and
-  `observability` namespaces.
+- `fluent-bit-collector` now only collects from the `sampleapp` namespace,
+  with an explicit self-exclusion filter as a second line of defense.
 - Logs land in daily indices (`app-logs-YYYY.MM.DD`) instead of one
   ever-growing index.
 - `apps/observability/opensearch-ism-bootstrap.yaml` deploys a Job (Argo

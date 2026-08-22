@@ -31,7 +31,18 @@ config:
     [FILTER]
         Name    grep
         Match   kube.*
-        Regex   $kubernetes['namespace_name'] ^(sampleapp|observability)$
+        Regex   $kubernetes['namespace_name'] ^(sampleapp)$
+
+    # Defense in depth: even if the namespace allow-list above is ever
+    # widened to include `observability` again, this stops fluent-bit
+    # from tailing its OWN container's log output — which caused a real
+    # self-ingestion feedback loop (each cycle re-processed its own
+    # previous output, nested inside itself, growing without bound).
+    # Confirmed on a real run; see infra repo RUNBOOK.md.
+    [FILTER]
+        Name      grep
+        Match     kube.*
+        Exclude   $kubernetes['pod_name'] ^fluent-bit-collector-
 
   outputs: |
     [OUTPUT]
