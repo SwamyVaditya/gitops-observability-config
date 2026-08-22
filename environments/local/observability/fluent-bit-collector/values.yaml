@@ -19,13 +19,14 @@
 # `kubectl get svc -n observability` after opensearch first syncs, and
 # correct `Host` below if the generated Service name differs.
 config:
-  # FIX 1: Restrict at the disk-level so Fluent Bit never looks at system folders
   inputs: |
     [INPUT]
       Name              tail
       Tag               kube.*
-      Path              /var/log/containers/*_sampleapp_*.log
-      Parser            docker
+      # FIX 1: Broaden path so containerd/k3s logs are captured cleanly
+      Path              /var/log/containers/*.log
+      # FIX 2: Change parser to 'cri' because k3d uses containerd internally
+      Parser            cri
       DB                /var/log/flb_kube.db
       Mem_Buf_Limit     50MB
       Skip_Long_Lines   On
@@ -40,13 +41,7 @@ config:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
-    # FIX 2: Explicitly drop any observability/infra logs BEFORE processing
-    [FILTER]
-        Name    grep
-        Match   kube.*
-        Exclude $kubernetes['namespace_name'] ^(observability|kube-system)$
-
-    # FIX 3: Whitelist ONLY the application logs
+    # FIX 3: Explicitly discard everything except your active workspace
     [FILTER]
         Name    grep
         Match   kube.*
@@ -64,7 +59,8 @@ config:
         tls                 Off
         Replace_Dots        On
 
-# FIX 4: Increase memory limits to prevent OOMKilled crash looping
+
+# FIX: Increase memory limits to prevent OOMKilled crash looping
 resources:
   requests:
     cpu: "100m"
@@ -73,7 +69,7 @@ resources:
     cpu: "500m"
     memory: "512Mi"
 
-# FIX 5: Ensure standard Fluent Bit chart path volumes are correctly mapped
+# FIX: Ensure standard Fluent Bit chart path volumes are correctly mapped
 hostVolumes:
   - name: varlog
     mountPath: /var/log
