@@ -33,22 +33,20 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
+        tag: "raw.kube.*"
         path: "/var/log/containers/*.log"
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
-        tag: "raw.kube.*"
 
     filters:
-      # FIX: Use literal scalar blocking (|-) to preserve the space-separated parameters
       - name: "rewrite_tag"
         match: "raw.kube.*"
-        rule: 
-          - |-
-            ~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false
+        # 4 values: $tag, regex, new_tag, keep
+        rule: "$tag ^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false"
+        emitter_storage.type: "memory"
 
-      # Standard Kubernetes structure enrichment
       - name: "kubernetes"
         match: "sampleapp.*"
         kube_tag_prefix: "sampleapp."
@@ -67,7 +65,6 @@ config:
         suppress_type_name: true
         tls: false
         replace_dots: true
-
 
 # FIX: Ensure standard Fluent Bit chart path volumes are correctly mapped
 hostVolumes:
