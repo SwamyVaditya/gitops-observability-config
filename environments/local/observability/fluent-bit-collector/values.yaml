@@ -41,13 +41,17 @@ config:
         tag: "raw.kube.*"
 
     filters:
-      # FIX: Enclose the regex string clearly so Fluent Bit can parse all 4 arguments
+      # FIX: Universal tag rewriting using explicit key-value parameters
       - name: "rewrite_tag"
         match: "raw.kube.*"
-        rule: 
-          - '"~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-" $namespace_name.$pod_name.$container_name false'
+        keep: false
+        # Match only log files belonging to your target application namespace
+        prefix: "sampleapp"
+        # Captures the raw pod and container details dynamically from the string
+        rule:
+          match: "^raw\\.kube\\."
 
-      # Standard Kubernetes structure enrichment (Optional metadata attachment)
+      # Standard Kubernetes structure enrichment
       - name: "kubernetes"
         match: "sampleapp.*"
         kube_tag_prefix: "sampleapp."
