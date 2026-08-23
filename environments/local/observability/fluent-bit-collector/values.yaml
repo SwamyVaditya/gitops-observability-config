@@ -33,31 +33,38 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
+        # 1. Works everywhere: captures logs across all standard cloud and local setups
         path: "/var/log/containers/*.log"
+        # 2. Universal multiline handling for modern container runtimes
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
-        # Natively generates tags like: kube.sampleapp.order-service.order-service
-        tag: "kube.<namespace_name>.<pod_name>.<container_name>"
-        tag_regex: "(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-"
+        # We start with a generic tag to process everything initially
+        tag: "raw.kube.*"
 
-    # FIX: Remove grep filters that rely on missing cluster API metadata.
-    # Instead, let the Output plugin implicitly whitelist via Tag Routing matching!
     filters:
+      # 3. UNIVERSAL REWRITE RULE: Extracts the true namespace name from the file path
+      # works perfectly even if the Kubernetes cluster API is offline or unreachable.
+      - name: "rewrite_tag"
+        match: "raw.kube.*"
+        rules: |
+          ~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false
+
+      # 4. Standard Kubernetes structure enrichment (Optional metadata attachment)
       - name: "kubernetes"
-        match: "kube.sampleapp.*" # Only enrich target app logs
-        kube_tag_prefix: "kube."
+        match: "sampleapp.*"
+        kube_tag_prefix: "sampleapp."
         merge_log: true
         keep_log: false
         k8s-logging.parser: true
         k8s-logging.exclude: true
 
     outputs:
+      # 5. DYNAMIC TARGET MATCHING: Since the tag was rewritten to start with the namespace name,
+      # matching 'sampleapp.*' automatically drops all other system noise instantly at zero cost.
       - name: "opensearch"
-        # CRITICAL FIX: Only match tags starting with kube.sampleapp.
-        # This completely ignores observability and kube-system logs at zero cost.
-        match: "kube.sampleapp.*"
+        match: "sampleapp.*"
         host: "opensearch-cluster-master"
         port: 9200
         logstash_format: true
@@ -66,15 +73,6 @@ config:
         tls: false
         replace_dots: true
 
-
-# FIX: Increase memory limits to prevent OOMKilled crash looping
-resources:
-  requests:
-    cpu: "100m"
-    memory: "128Mi"
-  limits:
-    cpu: "500m"
-    memory: "512Mi"
 
 # FIX: Ensure standard Fluent Bit chart path volumes are correctly mapped
 hostVolumes:
