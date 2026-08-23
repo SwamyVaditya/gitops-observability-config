@@ -41,15 +41,12 @@ config:
         tag: "raw.kube.*"
 
     filters:
-      # FIX: Universal tag rewriting using explicit key-value parameters
+      # FIX: Use literal scalar blocking (|-) to preserve the space-separated parameters
       - name: "rewrite_tag"
         match: "raw.kube.*"
-        keep: false
-        # Match only log files belonging to your target application namespace
-        prefix: "sampleapp"
-        # Captures the raw pod and container details dynamically from the string
-        rule:
-          match: "^raw\\.kube\\."
+        rule: 
+          - |-
+            ~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false
 
       # Standard Kubernetes structure enrichment
       - name: "kubernetes"
