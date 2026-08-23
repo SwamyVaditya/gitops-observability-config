@@ -33,25 +33,21 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
-        # 1. Works everywhere: captures logs across all standard cloud and local setups
         path: "/var/log/containers/*.log"
-        # 2. Universal multiline handling for modern container runtimes
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
-        # We start with a generic tag to process everything initially
         tag: "raw.kube.*"
 
     filters:
-      # 3. UNIVERSAL REWRITE RULE: Extracts the true namespace name from the file path
-      # works perfectly even if the Kubernetes cluster API is offline or unreachable.
+      # FIX: Pass 'rule' as a structured YAML sequence array element
       - name: "rewrite_tag"
         match: "raw.kube.*"
-        rules: |
-          ~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false
+        rule: 
+          - "~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false"
 
-      # 4. Standard Kubernetes structure enrichment (Optional metadata attachment)
+      # Standard Kubernetes structure enrichment (Optional metadata attachment)
       - name: "kubernetes"
         match: "sampleapp.*"
         kube_tag_prefix: "sampleapp."
@@ -61,8 +57,6 @@ config:
         k8s-logging.exclude: true
 
     outputs:
-      # 5. DYNAMIC TARGET MATCHING: Since the tag was rewritten to start with the namespace name,
-      # matching 'sampleapp.*' automatically drops all other system noise instantly at zero cost.
       - name: "opensearch"
         match: "sampleapp.*"
         host: "opensearch-cluster-master"
