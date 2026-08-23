@@ -33,36 +33,45 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
-        # Tool-Agnostic: Targets all container log patterns across any provider
         path: "/var/log/containers/*.log"
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
-        # Natively establishes 'raw.kube.*' so it handles logs universally
-        tag: "raw.kube.*"
+        # Keep it simple: route everything to a unified matching tag
+        tag: "kube.*"
 
     filters:
-      # SUCCESSFUL RULE: Uses your working string definition that bypasses the parser bug
-      - name: "rewrite_tag"
-        match: "raw.kube.*"
-        rule: "$tag ^raw\\.kube\\..*\\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>[^-]+)-.*$ $namespace_name.$pod_name.$container_name false"
-        emitter_storage.type: "memory"
-        emitter_mem_buf_limit: "50MB"
+      # 1. UNIVERSAL LUA FILTER: Inspects internal stream properties.
+      # It instantly drops everything that does not belong to 'sampleapp',
+      # completely avoiding string splitting errors under Argo CD.
+      - name: "lua"
+        match: "kube.*"
+        call: "filter_by_namespace"
+        code: |
+          function filter_by_namespace(tag, timestamp, record)
+              -- Extract the log filepath metadata populated by the tail plugin
+              local path = record["path"] or ""
+              
+              -- Check if the log file contains the '_sampleapp_' namespace sequence
+              if string.find(path, "_sampleapp_") then
+                  return 0, timestamp, record -- Keep the log record untouched
+              end
+              return -1, timestamp, record -- Instantly drop everything else (no loops!)
+          end
 
-      # Matches and enriches only your targeted application logs
+      # 2. Enrich only the surviving sampleapp records with standard metadata
       - name: "kubernetes"
-        match: "sampleapp.*"
-        kube_tag_prefix: "sampleapp."
+        match: "kube.*"
+        kube_tag_prefix: "kube."
         merge_log: true
         keep_log: false
         k8s-logging.parser: true
         k8s-logging.exclude: true
 
     outputs:
-      # Isolates and ships exclusively your application namespace metrics to OpenSearch
       - name: "opensearch"
-        match: "sampleapp.*"
+        match: "kube.*"
         host: "opensearch-cluster-master"
         port: 9200
         logstash_format: true
@@ -83,6 +92,7 @@ hostVolumes:
 
 tolerations:
   - operator: Exists
+
 
 
 
