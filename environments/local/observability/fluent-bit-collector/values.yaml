@@ -33,20 +33,28 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
-        tag: "raw.kube.*"
+        # 1. Broadly target all container logs on the host filesystem
         path: "/var/log/containers/*.log"
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
+        # 2. Generates a predictable tag pattern containing the filename parts
+        tag: "kube.<namespace_name>.<pod_name>.<container_name>"
+        tag_regex: "(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-"
 
     filters:
+      # 3. REWRITE TAG FILTER: Intercepts the generated tag string.
+      # If the tag contains 'sampleapp', it changes the tag prefix to 'sampleapp.*'.
+      # If it's a system namespace, it remains untouched and falls away silently.
       - name: "rewrite_tag"
-        match: "raw.kube.*"
-        rule: "$tag ^raw\\.kube\\..*\\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>[^-]+)-.*$ $namespace_name.$pod_name.$container_name false"
+        match: "kube.*"
+        rule: 
+          - "^kube\\.sampleapp\\.(?<pod>\\S+)\\.(?<container>\\S+)$ sampleapp.$pod.$container false"
         emitter_storage.type: "memory"
         emitter_mem_buf_limit: "50MB"
 
+      # 4. Enriches ONLY the matched application logs with Kubernetes cluster metadata
       - name: "kubernetes"
         match: "sampleapp.*"
         kube_tag_prefix: "sampleapp."
@@ -56,6 +64,7 @@ config:
         k8s-logging.exclude: true
 
     outputs:
+      # 5. Ships logs matching 'sampleapp.*' directly into your OpenSearch cluster
       - name: "opensearch"
         match: "sampleapp.*"
         host: "opensearch-cluster-master"
@@ -66,7 +75,6 @@ config:
         tls: false
         replace_dots: true
 
-# FIX: Ensure standard Fluent Bit chart path volumes are correctly mapped
 hostVolumes:
   - name: varlog
     mountPath: /var/log
@@ -79,6 +87,7 @@ hostVolumes:
 
 tolerations:
   - operator: Exists
+
 
 
 # The chart's default hostVolumes mounts /etc/machine-id as a hostPath of
