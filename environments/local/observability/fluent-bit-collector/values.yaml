@@ -41,11 +41,11 @@ config:
         tag: "raw.kube.*"
 
     filters:
-      # FIX: Pass 'rule' as a structured YAML sequence array element
+      # FIX: Enclose the regex string clearly so Fluent Bit can parse all 4 arguments
       - name: "rewrite_tag"
         match: "raw.kube.*"
         rule: 
-          - "~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)- $namespace_name.$pod_name.$container_name false"
+          - '"~^(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-" $namespace_name.$pod_name.$container_name false'
 
       # Standard Kubernetes structure enrichment (Optional metadata attachment)
       - name: "kubernetes"
