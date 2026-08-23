@@ -20,6 +20,15 @@
 # correct `Host` below if the generated Service name differs.
 # Disable the chart's automated magic so it takes your configuration literally
 config:
+  service:
+    daemon: "off"
+    flush: 1
+    log_level: "info"
+    parsers_file: "/fluent-bit/etc/parsers.conf"
+    http_server: true
+    http_listen: "0.0.0.0"
+    http_port: 2020
+  
   pipeline:
     inputs:
       - name: "tail"
@@ -34,8 +43,9 @@ config:
     filters:
       - name: "rewrite_tag"
         match: "raw.kube.*"
-        rule: "$tag ^raw\\.kube\\.var\\.log\\.containers\\.(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-.*$ $namespace_name.$pod_name.$container_name false"
+        rule: "$tag ^raw\\.kube\\..*\\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>[^-]+)-.*$ $namespace_name.$pod_name.$container_name false"
         emitter_storage.type: "memory"
+        emitter_mem_buf_limit: "50MB"
 
       - name: "kubernetes"
         match: "sampleapp.*"
