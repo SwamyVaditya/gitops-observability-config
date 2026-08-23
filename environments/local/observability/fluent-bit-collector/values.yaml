@@ -33,28 +33,24 @@ config:
     inputs:
       - name: "tail"
         alias: "k8s-logs"
-        # 1. Broadly target all container logs on the host filesystem
+        # Tool-Agnostic: Targets all container log patterns across any provider
         path: "/var/log/containers/*.log"
         multiline.parser: "cri"
         mem_buf_limit: "50MB"
         skip_long_lines: true
         read_from_head: true
-        # 2. Generates a predictable tag pattern containing the filename parts
-        tag: "kube.<namespace_name>.<pod_name>.<container_name>"
-        tag_regex: "(?<pod_name>[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)_(?<namespace_name>[^_]+)_(?<container_name>.+)-"
+        # Natively establishes 'raw.kube.*' so it handles logs universally
+        tag: "raw.kube.*"
 
     filters:
-      # 3. REWRITE TAG FILTER: Intercepts the generated tag string.
-      # If the tag contains 'sampleapp', it changes the tag prefix to 'sampleapp.*'.
-      # If it's a system namespace, it remains untouched and falls away silently.
+      # SUCCESSFUL RULE: Uses your working string definition that bypasses the parser bug
       - name: "rewrite_tag"
-        match: "kube.*"
-        rule: 
-          - "^kube\\.sampleapp\\.(?<pod>\\S+)\\.(?<container>\\S+)$ sampleapp.$pod.$container false"
+        match: "raw.kube.*"
+        rule: "$tag ^raw\\.kube\\..*\\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>[^-]+)-.*$ $namespace_name.$pod_name.$container_name false"
         emitter_storage.type: "memory"
         emitter_mem_buf_limit: "50MB"
 
-      # 4. Enriches ONLY the matched application logs with Kubernetes cluster metadata
+      # Matches and enriches only your targeted application logs
       - name: "kubernetes"
         match: "sampleapp.*"
         kube_tag_prefix: "sampleapp."
@@ -64,7 +60,7 @@ config:
         k8s-logging.exclude: true
 
     outputs:
-      # 5. Ships logs matching 'sampleapp.*' directly into your OpenSearch cluster
+      # Isolates and ships exclusively your application namespace metrics to OpenSearch
       - name: "opensearch"
         match: "sampleapp.*"
         host: "opensearch-cluster-master"
